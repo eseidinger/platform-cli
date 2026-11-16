@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Extract the packaged public API contract from a platform OpenAPI export."""
 
 import argparse

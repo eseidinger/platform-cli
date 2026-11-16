@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Reject release tags that differ from the CLI distribution version."""
 
 import os
