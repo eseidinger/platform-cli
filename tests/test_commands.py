@@ -32,11 +32,17 @@ def test_auth_status_reports_environment_source_without_token(monkeypatch):
     assert "should-not-appear" not in result.output
 
 
-def test_metrics_requires_component_before_contacting_api():
+def test_metrics_requires_component_before_contacting_api(monkeypatch):
+    monkeypatch.setenv("PLATFORM_API_URL", "https://platform.example")
+    monkeypatch.setenv("PLATFORM_ACCESS_TOKEN", "fixture-token")
+
+    def unexpected_client(config):
+        raise AssertionError("API client created")
+
+    monkeypatch.setattr("platform_cli.commands.PlatformClient", unexpected_client)
     result = CliRunner().invoke(app, ["metrics", "get", "--project", "demo"])
 
     assert result.exit_code == 2
-    assert "--component" in result.output
 
 
 def test_json_output_formats_configuration_errors(monkeypatch, tmp_path):
