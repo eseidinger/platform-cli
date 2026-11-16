@@ -8,12 +8,14 @@ documents commands and authentication.
 CI deployments and project administration, including hosted application access.
 Use `devplat --help` and `devplat access --help` to inspect commands.
 
-Install an editable development copy:
+Install an editable development copy and run the checks:
 
 ```bash
-python3 -m pip install -e '.[dev]'
-python3 -m pytest tests
-devplat contract check --output json
+uv venv
+uv pip install -e '.[dev]'
+uv run --no-sync pytest tests
+uv run --no-sync devplat contract check --output json
+uv build
 ```
 
 Set the values returned when the deployment credential was created. Keep the
@@ -44,9 +46,9 @@ OpenAPI export in the [developer-platform repository](https://github.com/eseidin
 After an API contract change, check out both repositories side by side and run:
 
 ```bash
-python3 scripts/generate-cli-contract.py --source ../developer-platform/docs/api/openapi.json
-devplat contract check --output json
-python3 -m pytest tests
+uv run --no-sync python scripts/generate-cli-contract.py --source ../developer-platform/docs/api/openapi.json
+uv run --no-sync devplat contract check --output json
+uv run --no-sync pytest tests
 ```
 
 Review and commit the resulting contract change here with any CLI command

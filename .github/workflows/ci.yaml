@@ -23,22 +23,24 @@ jobs:
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.14"
-      - run: python3 -m pip install -e '.[dev]' build twine ruff
-      - run: ruff check src tests scripts
-      - run: ruff format --check src tests scripts
+      - run: python3 -m pip install uv
+      - run: uv venv --python 3.14
+      - run: uv pip install -e '.[dev]' twine ruff
+      - run: uv run --no-sync ruff check src tests scripts
+      - run: uv run --no-sync ruff format --check src tests scripts
       - name: Validate release version
         if: startsWith(github.ref, 'refs/tags/v')
-        run: python3 scripts/cli-release.py
-      - run: devplat contract check --output json
-      - run: python3 -m pytest tests
-      - run: python3 -m build --outdir dist .
-      - run: python3 -m twine check dist/*
+        run: uv run --no-sync python scripts/cli-release.py
+      - run: uv run --no-sync devplat contract check --output json
+      - run: uv run --no-sync pytest tests
+      - run: uv build --out-dir dist .
+      - run: uv run --no-sync twine check dist/*
       - name: Test installed wheel
         run: |
-          python3 -m pip uninstall -y developer-platform-cli
-          python3 -m pip install dist/*.whl
-          python3 -m pytest tests
-          devplat contract check --output json
+          uv pip uninstall developer-platform-cli
+          uv pip install dist/*.whl
+          uv run --no-sync pytest tests
+          uv run --no-sync devplat contract check --output json
       - uses: actions/upload-artifact@v4
         with:
           name: cli-distributions
