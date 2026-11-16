@@ -5,11 +5,12 @@ from importlib.resources import files
 
 import httpx
 import pytest
+from typer.testing import CliRunner
+
 from platform_cli.__main__ import app
 from platform_cli.client import PlatformClient
 from platform_cli.profiles import Profile, ProfileStore
 from platform_cli.registry import COMMANDS, EXCLUSIONS
-from typer.testing import CliRunner
 
 
 def _cli(monkeypatch, tmp_path, handler):

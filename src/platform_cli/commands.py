@@ -149,41 +149,57 @@ def emit(value: Any, output: str, *, one_time: bool = False) -> None:
 def fail(
     error: Exception, output: str = "table", secrets: tuple[str, ...] = ()
 ) -> typer.Exit:
-    if isinstance(error, ApiError):
+    def report(
+        detail: str,
+        code: str | None,
+        *,
+        status: int | None = None,
+        request_id: str | None = None,
+        retryable: bool = False,
+    ) -> None:
         payload = {
-            "status": error.status_code,
-            "detail": error.detail,
-            "code": error.code,
-            "request_id": error.request_id,
-            "retryable": error.status_code in {429, 502, 503, 504},
+            "status": status,
+            "detail": detail,
+            "code": code,
+            "request_id": request_id,
+            "retryable": retryable,
         }
         typer.echo(
             json.dumps(clean(payload, secrets), separators=(",", ":"))
             if output == "json"
-            else clean(error.detail, secrets),
+            else clean(detail, secrets),
             err=True,
+        )
+
+    if isinstance(error, ApiError):
+        report(
+            error.detail,
+            error.code,
+            status=error.status_code,
+            request_id=error.request_id,
+            retryable=error.status_code in {429, 502, 503, 504},
         )
         return typer.Exit(error.exit_code)
     if isinstance(error, ConfigurationError):
-        typer.echo(clean(str(error), secrets), err=True)
+        report(str(error), "configuration_error")
         return typer.Exit(2)
     if isinstance(
         error, (OperationFailed, AccessOperationFailed, LifecycleOperationFailed)
     ):
-        typer.echo(clean(str(error), secrets), err=True)
+        report(str(error), "operation_failed")
         return typer.Exit(9)
     if isinstance(error, OperationTimeout):
-        typer.echo(clean(str(error), secrets), err=True)
+        report(str(error), "operation_timeout")
         return typer.Exit(10)
     if isinstance(error, (ValueError, OSError, json.JSONDecodeError)):
-        typer.echo(
+        report(
             "Invalid input or file; check the command arguments and JSON syntax.",
-            err=True,
+            "invalid_input",
         )
         return typer.Exit(2)
-    typer.echo(
+    report(
         "The CLI could not complete the request; inspect the API or identity provider availability.",
-        err=True,
+        "cli_error",
     )
     return typer.Exit(8)
 
@@ -784,14 +800,14 @@ def register(app: typer.Typer, spec: CommandSpec):
     options.append("output")
     for name in dict.fromkeys(options):
         declaration = "--" + name.replace("_", "-")
-        annotation = (
-            list[str] | None
-            if name == "group"
-            else bool
-            if name in {"wait", "emergency", "project_wide_credential", "follow"}
-            else str | None
-        )
-        default = False if annotation is bool else None
+        required = spec.command == "metrics get" and name == "component"
+        if name == "group":
+            annotation = list[str] | None
+        elif name in {"wait", "emergency", "project_wide_credential", "follow"}:
+            annotation = bool
+        else:
+            annotation = str if required else str | None
+        default = ... if required else (False if annotation is bool else None)
         params.append(
             inspect.Parameter(
                 name,

@@ -41,7 +41,7 @@ class AccessOperation(BaseModel):
 
 
 class OperationAccepted(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     operation_id: str = Field(min_length=1)
     state: str = Field(min_length=1)

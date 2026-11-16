@@ -214,7 +214,7 @@ def deploy_apply(
                 return
 
             def update(status: OperationStatus) -> None:
-                if output != "json":
+                if output != "json" and not _state(ctx).quiet:
                     typer.echo(
                         f"Operation {status.operation_id}: {status.state}; readiness {status.readiness.state}.",
                         err=True,

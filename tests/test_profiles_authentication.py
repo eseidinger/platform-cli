@@ -6,6 +6,7 @@ from urllib.parse import parse_qs
 
 import httpx
 import pytest
+
 from platform_cli.authentication import HumanAuthentication
 from platform_cli.profiles import Profile, ProfileStore, SessionStore
 

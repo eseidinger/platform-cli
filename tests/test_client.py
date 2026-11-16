@@ -1,4 +1,5 @@
 import httpx
+
 from platform_cli.client import PlatformClient, wait_for_operation
 from platform_cli.config import runtime_config
 from platform_cli.models import OperationAccepted
@@ -43,6 +44,33 @@ def test_deployment_credential_exchange_and_apply_use_bearer_token():
     assert accepted.operation_id == "operation-1"
     assert requests[0].url == "https://identity.example/token"
     assert requests[1].headers["authorization"] == "Bearer short-lived"
+
+
+def test_deployment_accepts_contract_permitted_extra_response_fields():
+    response = {
+        "operation_id": "operation-1",
+        "state": "queued",
+        "revision": 1,
+        "status_url": "/v1/operations/operation-1",
+        "server_extension": "future value",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(202, json=response)
+
+    config = runtime_config(
+        {
+            "PLATFORM_API_URL": "https://platform.example",
+            "PLATFORM_ACCESS_TOKEN": "fixture-token",
+        }
+    )
+    client = PlatformClient(
+        config, httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    accepted = client.deploy("demo", {}, "fixture-token")
+
+    assert accepted.operation_id == "operation-1"
+    assert "server_extension" not in accepted.model_dump()
 
 
 def test_wait_requires_apply_success_and_readiness():

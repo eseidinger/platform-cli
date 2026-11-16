@@ -1,11 +1,13 @@
 import json
 
 import httpx
+from typer.testing import CliRunner
+
 from platform_cli.__main__ import app
 from platform_cli.client import PlatformClient
 from platform_cli.commands import _body
+from platform_cli.models import OperationAccepted, OperationStatus
 from platform_cli.registry import COMMANDS
-from typer.testing import CliRunner
 
 
 def test_project_grant_accepts_username_without_issuer_or_subject():
@@ -28,6 +30,114 @@ def test_auth_status_reports_environment_source_without_token(monkeypatch):
         "persistent": False,
     }
     assert "should-not-appear" not in result.output
+
+
+def test_metrics_requires_component_before_contacting_api():
+    result = CliRunner().invoke(app, ["metrics", "get", "--project", "demo"])
+
+    assert result.exit_code == 2
+    assert "--component" in result.output
+
+
+def test_json_output_formats_configuration_errors(monkeypatch, tmp_path):
+    monkeypatch.setenv("DEVPLAT_CONFIG_DIR", str(tmp_path))
+    for key in (
+        "PLATFORM_API_URL",
+        "PLATFORM_ACCESS_TOKEN",
+        "PLATFORM_TOKEN_ENDPOINT",
+        "PLATFORM_CLIENT_ID",
+        "PLATFORM_CLIENT_SECRET",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "metrics",
+            "get",
+            "--project",
+            "demo",
+            "--component",
+            "web",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert json.loads(result.stderr) == {
+        "status": None,
+        "detail": "PLATFORM_API_URL is required",
+        "code": "configuration_error",
+        "request_id": None,
+        "retryable": False,
+    }
+
+
+def test_quiet_deployment_wait_suppresses_progress(monkeypatch, tmp_path):
+    monkeypatch.setenv("DEVPLAT_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("PLATFORM_API_URL", "https://platform.example")
+    monkeypatch.setenv("PLATFORM_ACCESS_TOKEN", "fixture-token")
+
+    class FakeClient:
+        def __init__(self, config):
+            self.config = config
+
+        def access_token(self):
+            return "fixture-token"
+
+        def deploy(self, project, body, token, if_match):
+            return OperationAccepted(
+                operation_id="op-1",
+                state="queued",
+                revision=1,
+                status_url="/v1/operations/op-1",
+            )
+
+        def close(self):
+            pass
+
+    status = OperationStatus.model_validate(
+        {
+            "operation_id": "op-1",
+            "state": "succeeded",
+            "revision": 1,
+            "readiness": {"state": "ready"},
+        }
+    )
+
+    def wait_for_operation(
+        client, accepted, token, timeout, interval, clock, sleep, update
+    ):
+        update(status)
+        return status
+
+    monkeypatch.setattr("platform_cli.__main__.PlatformClient", FakeClient)
+    monkeypatch.setattr("platform_cli.__main__.wait_for_operation", wait_for_operation)
+    declaration = {
+        "apiVersion": "platform.eseidinger.de/v1",
+        "kind": "Application",
+        "metadata": {"name": "orders"},
+        "spec": {
+            "components": [
+                {
+                    "name": "web",
+                    "type": "service",
+                    "runtime": {"type": "container", "image": "example:v1"},
+                }
+            ]
+        },
+    }
+    args = ["deploy", "apply", "--project", "orders", "--file", "-", "--wait"]
+
+    verbose = CliRunner().invoke(app, args, input=json.dumps(declaration))
+    quiet = CliRunner().invoke(app, ["--quiet", *args], input=json.dumps(declaration))
+
+    assert verbose.exit_code == 0, verbose.output
+    assert "Operation op-1:" in verbose.stderr
+    assert quiet.exit_code == 0, quiet.output
+    assert quiet.stderr == ""
+    assert "succeeded" in quiet.stdout
 
 
 def test_existing_deploy_apply_works_with_environment_auth_and_broken_profile(
